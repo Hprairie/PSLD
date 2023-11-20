@@ -173,22 +173,67 @@ def random_sq_bbox(img, mask_shape, image_size=256, margin=(16, 16)):
 
     return mask, t, t+h, l, l+w
 
+def create_mask_from_bbox(img, mask_shape, image_size=256, margin=(1,1)):
+    """ Will generate a mask based on passed bounding boxes 
+    in the Yolov7 format. Will combine masks if multiple samples within the image.
+    """
+    B, C, H, W = img.shape
+
+    print(image_size)
+    # make mask
+    mask = torch.zeros([B, C, H, W], device=img.device)
+
+    for sample in mask_shape:
+            _, x_center, y_center, width, height = sample
+
+            # Convert normalized coordinates to pixel coordinates
+            x_center *= image_size
+            y_center *= image_size
+            width *= image_size
+            height *= image_size
+
+            # Calculate the top-left and bottom-right corners of the bounding box
+            x1 = int(x_center - width / 2)
+            y1 = int(y_center - height / 2)
+            x2 = int(x_center + width / 2)
+            y2 = int(y_center + height / 2)
+
+            # Apply the margin
+            x1 = max(0, x1 - margin[0])
+            y1 = max(0, y1 - margin[1])
+            x2 = min(image_size - 1, x2 + margin[0])
+            y2 = min(image_size - 1, y2 + margin[1])
+
+            # Set the mask values for this samples bounding box to 0
+            mask[...,y1:y2, x1:x2] = 1
+
+    return mask
+
 
 class mask_generator:
     def __init__(self, mask_type, mask_len_range=None, mask_prob_range=None,
-                 image_size=256, margin=(16, 16)):
+                 image_size=256, margin=(16, 16), yolov7_bounding_box_path=None):
         """
         (mask_len_range): given in (min, max) tuple.
         Specifies the range of box size in each dimension
         (mask_prob_range): for the case of random masking,
         specify the probability of individual pixels being masked
         """
-        assert mask_type in ['box', 'random', 'both', 'extreme']
+        assert mask_type in ['box', 'random', 'both', 'extreme', 'outpainting']
         self.mask_type = mask_type
         self.mask_len_range = mask_len_range
         self.mask_prob_range = mask_prob_range
         self.image_size = image_size
         self.margin = margin
+        self.bb_path = yolov7_bounding_box_path
+        if yolov7_bounding_box_path is not None:
+            self.bb_info = []
+            with open(self.bb_path, 'r') as file:
+                for sample in file:
+                    # Split the current samples data into values seperate by a space
+                    values = sample.split()
+                    # Store the values
+                    self.bb_info.append([float(value) for value in values])
 
     def _retrieve_box(self, img):
         l, h = self.mask_len_range
@@ -200,6 +245,16 @@ class mask_generator:
                               image_size=self.image_size,
                               margin=self.margin)
         return mask, t, tl, w, wh
+    
+    def _retrieve_outpainting_box(self, img):
+        assert self.bb_path is not None, "Bounding Box Path was Never Passed"
+
+        # Create the mask based on each of the samples
+        mask = create_mask_from_bbox(img,
+                                     mask_shape=self.bb_info,
+                                     image_size=self.image_size,
+                                     margin=self.margin)
+        return mask
 
     def _retrieve_random(self, img):
         total = self.image_size ** 2
@@ -225,6 +280,9 @@ class mask_generator:
         elif self.mask_type == 'extreme':
             mask, t, th, w, wl = self._retrieve_box(img)
             mask = 1. - mask
+            return mask
+        elif self.mask_type == 'outpainting':
+            mask = self._retrieve_outpainting_box(img)
             return mask
 
 def unnormalize(img, s=0.95):

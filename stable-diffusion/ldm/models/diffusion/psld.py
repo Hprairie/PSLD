@@ -243,7 +243,7 @@ class DDIMSampler(object):
 
             z_prev = a_prev.sqrt() * pred_z_0 + dir_zt + noise
             
-            
+
             ##############################################
             image_pred = self.model.differentiable_decode_first_stage(pred_z_0)
             meas_pred = operator.forward(image_pred,mask=ip_mask)

@@ -299,6 +299,11 @@ def main():
         action='store_true',
         help='load SD weights trained on FFHQ',
     )
+    parser.add_argument(
+        "--baseline_model",
+        action='store_true',
+        help='load baseline stable diffusion model'
+    )
     ##
 
     opt = parser.parse_args()
@@ -314,7 +319,12 @@ def main():
         print("Using FFHQ 256 finetuned model...")
         opt.config = "models/ldm/ffhq256/config.yaml"
         opt.ckpt = "models/ldm/ffhq256/model.ckpt"
+
     ##
+    if opt.baseline_model:
+        print("Using the baseline stable-diffusion model")
+        opt.config = "configs/stable-diffusion/v1-inference.yaml"
+        opt.ckpt = "models/ldm/stable-diffusion-v1/model.ckpt"
     
     seed_everything(opt.seed)
 
@@ -416,12 +426,11 @@ def main():
     org_image = (org_image - 0.5)/0.5
     org_image = org_image[None,:,:,:].cuda()
 
-    # Exception) In case of inpainging,
+    # Exception) In case of inpainting,
     if measure_config['operator'] ['name'] == 'inpainting':
         mask = mask_gen(org_image) # dps mask
         # mask = torch.ones_like(org_image) # no mask
         
-        mask = mask[:, 0, :, :].unsqueeze(dim=0)
         # Forward measurement model (Ax + n)
         y = operator.forward(org_image, mask=mask)
         y_n = noiser(y)
