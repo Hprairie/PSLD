@@ -1,5 +1,6 @@
 import argparse, os, sys, glob
 import cv2
+import shutil
 import torch
 import numpy as np
 from omegaconf import OmegaConf
@@ -123,6 +124,11 @@ def main():
         "--skip_save",
         action='store_true',
         help="do not save individual samples. For speed measurements.",
+    )
+    parser.add_argument(
+        "--skip_label",
+        action='store_true',
+        help='do not save labels. Used for only generating images',
     )
     parser.add_argument(
         "--ddim_steps",
@@ -330,7 +336,7 @@ def main():
     if opt.baseline_model:
         print("Using the baseline stable-diffusion model")
         opt.config = "configs/stable-diffusion/v1-inference.yaml"
-        opt.ckpt = "models/ldm/stable-diffusion-v1/model.ckpt"
+        opt.ckpt = "models/ldm/stable-diffusion-v4/model.ckpt"
     
     seed_everything(opt.seed)
 
@@ -371,6 +377,9 @@ def main():
 
     sample_path = os.path.join(outpath, "samples")
     os.makedirs(sample_path, exist_ok=True)
+    if not opt.skip_label:
+        label_path = os.path.join(outpath, "labels")
+        os.makedirs(label_path, exist_ok=True)
     base_count = len(os.listdir(sample_path))
     grid_count = len(os.listdir(outpath)) - 1
 
@@ -408,8 +417,13 @@ def main():
     task_config['data']['root'] = opt.dataset_yolov7 + '/train'
     images = os.listdir(task_config['data']['root'] + '/images')
 
+    print(len(images))
+    count = 0
     # Iterate through every image in the training set
     for image in images:
+        count += 1
+        if count <= 381:
+            continue
         # Load the image
         img = plt.imread(task_config['data']['root']+'/images/'+image)
         # img = next(iter(loader))
@@ -434,6 +448,11 @@ def main():
             yolov7_bounding_box_path=label_path
             )
         
+        img = f.interpolate(img, opt.H)
+        x_checked_image_torch = img[:,:3,:,:].cuda()
+
+        if len(mask_gen.bb_info) == 0:
+            continue
         # # Detach the image and mask from their computation graph and move them to the CPU
         # img_t = img[0].detach().cpu().numpy()
         # mask_t = mask_gen(img)[0].detach().cpu().numpy()
@@ -452,9 +471,6 @@ def main():
         # plt.title('Mask')
 
         # plt.show()
-        
-        img = f.interpolate(img, opt.H)
-        x_checked_image_torch = img[:,:3,:,:].cuda()
 
         org_image = torch.clone(x_checked_image_torch[0].detach())
         org_image = (org_image - 0.5)/0.5
@@ -487,7 +503,7 @@ def main():
             with model.ema_scope():
                 tic = time.time()
                 all_samples = list()
-                for n in trange(opt.n_iter, desc="Sampling"):
+                for _ in trange(opt.n_iter, desc="Sampling"):
                     for prompts in tqdm(data, desc="data"):
                         uc = None
                         if opt.ffhq256:
@@ -544,27 +560,41 @@ def main():
                         x_checked_image_torch = torch.from_numpy(x_samples_ddim).permute(0, 3, 1, 2)
                         
                         
+                        # if not opt.skip_save:
+                        #     for x_sample in x_checked_image_torch:
+                        #         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                        #         img = Image.fromarray(x_sample.astype(np.uint8))
+                        #         # img = put_watermark(img, wm_encoder)
+                        #         img.save(os.path.join(sample_path, f"{base_count:05}.png"))
+                        #         base_count += 1
+
                         if not opt.skip_save:
-                            for x_sample in x_checked_image_torch:
+                            for i, x_sample in enumerate(x_checked_image_torch):
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 img = Image.fromarray(x_sample.astype(np.uint8))
                                 # img = put_watermark(img, wm_encoder)
-                                img.save(os.path.join(sample_path, f"{base_count:05}.png"))
-                                base_count += 1
+                                img.convert('L').save(os.path.join(sample_path, f"{image}_{i+1}.png"))
+
+                                if not opt.skip_label:
+                                    image_name, _ = os.path.splitext(image)
+                                    image_loc = task_config['data']['root']+'/labels/'+image_name+'.txt'
+                                    shutil.copy(image_loc, os.path.join(os.path.join(outpath, "labels"), f"{image}_{i+1}.txt"))
+
+
 
                         if not opt.skip_grid:
                             all_samples.append(x_checked_image_torch)
                         
                         # pdb.set_trace()
-                        if not opt.skip_low_res:
-                            if not opt.skip_save:
-                                inpainted_image_low_res = f.interpolate(x_checked_image_torch.type(torch.float32), size=(opt.H//2, opt.W//2))
-                                for x_sample in inpainted_image_low_res:
-                                    x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-                                    img = Image.fromarray(x_sample.astype(np.uint8))
-                                    # img = put_watermark(img, wm_encoder)
-                                    img.save(os.path.join(sample_path, f"{base_count:05}_low_res.png"))
-                                    base_count += 1
+                        # if not opt.skip_low_res:
+                        #     if not opt.skip_save:
+                        #         inpainted_image_low_res = f.interpolate(x_checked_image_torch.type(torch.float32), size=(opt.H//2, opt.W//2))
+                        #         for x_sample in inpainted_image_low_res:
+                        #             x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                        #             img = Image.fromarray(x_sample.astype(np.uint8))
+                        #             # img = put_watermark(img, wm_encoder)
+                        #             img.save(os.path.join(sample_path, f"{base_count:05}_low_res.png"))
+                        #             base_count += 1
 
                             
 
@@ -586,7 +616,6 @@ def main():
         print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
             f" \nEnjoy.")
         
-        break
 
 
 if __name__ == "__main__":

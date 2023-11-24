@@ -7,6 +7,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 from motionblur.motionblur import Kernel
 from .fastmri_utils import fft2c_new, ifft2c_new
+from scipy.ndimage import distance_transform_edt
 
 
 """
@@ -173,13 +174,12 @@ def random_sq_bbox(img, mask_shape, image_size=256, margin=(16, 16)):
 
     return mask, t, t+h, l, l+w
 
-def create_mask_from_bbox(img, mask_shape, image_size=256, margin=(1,1)):
+def create_mask_from_bbox(img, mask_shape, image_size=256, margin=(32,32)):
     """ Will generate a mask based on passed bounding boxes 
     in the Yolov7 format. Will combine masks if multiple samples within the image.
     """
     B, C, H, W = img.shape
 
-    print(image_size)
     # make mask
     mask = torch.zeros([B, C, H, W], device=img.device)
 
@@ -209,9 +209,104 @@ def create_mask_from_bbox(img, mask_shape, image_size=256, margin=(1,1)):
 
     return mask
 
+def create_random_mask_from_bbox(img, mask_shape, mask_prob_range, image_size=256, margin=(16,16)):
+        total = image_size ** 2
+        l, h = mask_prob_range
+        prob = np.random.uniform(l, h)
+        mask_vec = torch.ones([1, image_size * image_size])
+        samples = np.random.choice(image_size * image_size, int(total * prob), replace=False)
+        mask_vec[:, samples] = 0
+        mask_b = mask_vec.view(1, image_size, image_size)
+        mask_b = mask_b.repeat(3, 1, 1)
+        mask = torch.ones_like(img, device=img.device)
+        mask[:, ...] = mask_b
+
+        B, C, H, W = img.shape
+
+        for sample in mask_shape:
+                _, x_center, y_center, width, height = sample
+
+                # Convert normalized coordinates to pixel coordinates
+                x_center *= image_size
+                y_center *= image_size
+                width *= image_size
+                height *= image_size
+
+                # Calculate the top-left and bottom-right corners of the bounding box
+                x1 = int(x_center - width / 2)
+                y1 = int(y_center - height / 2)
+                x2 = int(x_center + width / 2)
+                y2 = int(y_center + height / 2)
+
+                # Apply the margin
+                x1 = max(0, x1 - margin[0])
+                y1 = max(0, y1 - margin[1])
+                x2 = min(image_size - 1, x2 + margin[0])
+                y2 = min(image_size - 1, y2 + margin[1])
+
+                # Set the mask values for this samples bounding box to 0
+                mask[...,y1:y2, x1:x2] = 1
+
+        return mask
+
+def create_random_mask_from_bbox_2(img, mask_shape, mask_prob_dist, image_size=256, margin=(16,16)):
+
+        B, C, H, W = img.shape
+
+        # make mask
+        mask = torch.zeros([B, C, H, W], device=img.device)
+
+        for sample in mask_shape:
+            _, x_center, y_center, width, height = sample
+
+            # Convert normalized coordinates to pixel coordinates
+            x_center *= image_size
+            y_center *= image_size
+            width *= image_size
+            height *= image_size
+
+            # Calculate the top-left and bottom-right corners of the bounding box
+            x1 = int(x_center - width / 2)
+            y1 = int(y_center - height / 2)
+            x2 = int(x_center + width / 2)
+            y2 = int(y_center + height / 2)
+
+            # Apply the margin
+            x1 = max(0, x1 - margin[0])
+            y1 = max(0, y1 - margin[1])
+            x2 = min(image_size - 1, x2 + margin[0])
+            y2 = min(image_size - 1, y2 + margin[1])
+
+            # Set the mask values for this samples bounding box to 0
+            mask[...,y1:y2, x1:x2] = 1
+        
+
+        # Compute the distance transform from the mask
+        dist = distance_transform_edt(1 - mask[0, 0].detach().cpu().numpy())
+
+        # Normalize the distance map to the range [0, 1]
+        dist = dist / np.amax(dist)
+
+        # Create a ranom matrix and sample a value to determine mask threshold
+        mu, sigma = mask_prob_dist
+        rand = np.random.normal(mu, sigma, dist.shape)
+
+        # Mask the pixels with a greater threshold
+        mask_dist = np.where(dist < rand, 1, 0)
+        combined_mask = np.logical_or(mask[0,0].detach().cpu().numpy(), mask_dist)
+
+        # Replicate the combined mask for all channels and batches
+        combined_mask = np.repeat(combined_mask[np.newaxis, np.newaxis, :, :], B * C, axis=0)
+
+        # Reshape the combined mask to match the shape of the input
+        combined_mask = combined_mask.reshape(B, C, H, W)
+        combined_mask = torch.from_numpy(combined_mask).float().to(img.device)
+
+        return combined_mask
+
 
 class mask_generator:
-    def __init__(self, mask_type, mask_len_range=None, mask_prob_range=None,
+    def __init__(self, mask_type, mask_len_range=None, mask_prob_dist=None, mask_prob_range=None,
                  image_size=256, margin=(16, 16), yolov7_bounding_box_path=None):
         """
         (mask_len_range): given in (min, max) tuple.
@@ -219,10 +314,11 @@ class mask_generator:
         (mask_prob_range): for the case of random masking,
         specify the probability of individual pixels being masked
         """
-        assert mask_type in ['box', 'random', 'both', 'extreme', 'outpainting']
+        assert mask_type in ['box', 'random', 'both', 'extreme', 'outpainting', 'random-outpainting']
         self.mask_type = mask_type
         self.mask_len_range = mask_len_range
         self.mask_prob_range = mask_prob_range
+        self.mask_prob_dist = mask_prob_dist
         self.image_size = image_size
         self.margin = margin
         self.bb_path = yolov7_bounding_box_path
@@ -255,6 +351,17 @@ class mask_generator:
                                      image_size=self.image_size,
                                      margin=self.margin)
         return mask
+    
+    def _retrieve_random_outpainting_box(self, img):
+        assert self.bb_path is not None, "Bounding Box Path was Never Passed"
+
+        # Creat the mask based on each of the samples
+        mask = create_random_mask_from_bbox_2(img,
+                                              mask_shape=self.bb_info,
+                                              mask_prob_dist=self.mask_prob_dist,
+                                              image_size=self.image_size,
+                                              margin=self.margin)
+        return mask
 
     def _retrieve_random(self, img):
         total = self.image_size ** 2
@@ -283,6 +390,9 @@ class mask_generator:
             return mask
         elif self.mask_type == 'outpainting':
             mask = self._retrieve_outpainting_box(img)
+            return mask
+        elif self.mask_type == 'random-outpainting':
+            mask = self._retrieve_random_outpainting_box(img)
             return mask
 
 def unnormalize(img, s=0.95):
