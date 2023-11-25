@@ -72,7 +72,7 @@ def load_model_from_config(config, ckpt, verbose=False):
 def put_watermark(img, wm_encoder=None):
     if wm_encoder is not None:
         img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        img = wm_encoder.encode(img, 'dwtDct')
+        img = wm_encoder.encode(img, "dwtDct")
         img = Image.fromarray(img[:, :, ::-1])
     return img
 
@@ -81,7 +81,7 @@ def load_replacement(x):
     try:
         hwc = x.shape
         y = Image.open("assets/rick.jpeg").convert("RGB").resize((hwc[1], hwc[0]))
-        y = (np.array(y)/255.0).astype(x.dtype)
+        y = (np.array(y) / 255.0).astype(x.dtype)
         assert y.shape == x.shape
         return y
     except Exception:
@@ -89,8 +89,12 @@ def load_replacement(x):
 
 
 def check_safety(x_image):
-    safety_checker_input = safety_feature_extractor(numpy_to_pil(x_image), return_tensors="pt")
-    x_checked_image, has_nsfw_concept = safety_checker(images=x_image, clip_input=safety_checker_input.pixel_values)
+    safety_checker_input = safety_feature_extractor(
+        numpy_to_pil(x_image), return_tensors="pt"
+    )
+    x_checked_image, has_nsfw_concept = safety_checker(
+        images=x_image, clip_input=safety_checker_input.pixel_values
+    )
     assert x_checked_image.shape[0] == len(has_nsfw_concept)
     for i in range(len(has_nsfw_concept)):
         if has_nsfw_concept[i]:
@@ -102,33 +106,29 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--prompt",
-        type=str,
-        nargs="?",
-        default="",
-        help="the prompt to render"
+        "--prompt", type=str, nargs="?", default="", help="the prompt to render"
     )
     parser.add_argument(
         "--outdir",
         type=str,
         nargs="?",
         help="dir to write results to",
-        default="outputs/txt2img-samples"
+        default="outputs/txt2img-samples",
     )
     parser.add_argument(
         "--skip_grid",
-        action='store_false',
+        action="store_false",
         help="do not save a grid, only individual samples. Helpful when evaluating lots of samples",
     )
     parser.add_argument(
         "--skip_save",
-        action='store_true',
+        action="store_true",
         help="do not save individual samples. For speed measurements.",
     )
     parser.add_argument(
         "--skip_label",
-        action='store_true',
-        help='do not save labels. Used for only generating images',
+        action="store_true",
+        help="do not save labels. Used for only generating images",
     )
     parser.add_argument(
         "--ddim_steps",
@@ -138,22 +138,22 @@ def main():
     )
     parser.add_argument(
         "--plms",
-        action='store_true',
+        action="store_true",
         help="use plms sampling",
     )
     parser.add_argument(
         "--dpm_solver",
-        action='store_true',
+        action="store_true",
         help="use dpm_solver sampling",
     )
     parser.add_argument(
         "--laion400m",
-        action='store_true',
+        action="store_true",
         help="uses the LAION400M model",
     )
     parser.add_argument(
         "--fixed_code",
-        action='store_true',
+        action="store_true",
         help="if enabled, uses the same starting code across samples ",
     )
     parser.add_argument(
@@ -238,31 +238,31 @@ def main():
         type=str,
         help="evaluate at this precision",
         choices=["full", "autocast"],
-        default="autocast"
+        default="autocast",
     )
-    ## 
+    ##
     parser.add_argument(
         "--dps_path",
         type=str,
-        default='../diffusion-posterior-sampling/',
+        default="../diffusion-posterior-sampling/",
         help="DPS codebase path",
     )
     parser.add_argument(
         "--task_config",
         type=str,
-        default='configs/inpainting_config.yaml',
+        default="configs/inpainting_config.yaml",
         help="task config yml file",
     )
     parser.add_argument(
         "--diffusion_config",
         type=str,
-        default='configs/diffusion_config.yaml',
+        default="configs/diffusion_config.yaml",
         help="diffusion config yml file",
     )
     parser.add_argument(
         "--model_config",
         type=str,
-        default='configs/model_config.yaml',
+        default="configs/model_config.yaml",
         help="model config yml file",
     )
     parser.add_argument(
@@ -292,28 +292,28 @@ def main():
     parser.add_argument(
         "--file_id",
         type=str,
-        default='00014.png',
-        help='input image',
+        default="00014.png",
+        help="input image",
     )
     parser.add_argument(
         "--skip_low_res",
-        action='store_true',
-        help='downsample result to 256',
+        action="store_true",
+        help="downsample result to 256",
     )
     parser.add_argument(
         "--ffhq256",
-        action='store_true',
-        help='load SD weights trained on FFHQ',
+        action="store_true",
+        help="load SD weights trained on FFHQ",
     )
     parser.add_argument(
         "--baseline_model",
-        action='store_true',
-        help='load baseline stable diffusion model'
+        action="store_true",
+        help="load baseline stable diffusion model",
     )
     parser.add_argument(
         "--dataset_yolov7",
         type=str,
-        default='Dataset',
+        default="Dataset",
         help="Path to Yolov7 Dataset",
     )
     ##
@@ -325,8 +325,8 @@ def main():
         print("Falling back to LAION 400M model...")
         opt.config = "configs/latent-diffusion/txt2img-1p4B-eval.yaml"
         opt.ckpt = "models/ldm/text2img-large/model.ckpt"
-        
-    ## 
+
+    ##
     if opt.ffhq256:
         print("Using FFHQ 256 finetuned model...")
         opt.config = "models/ldm/ffhq256/config.yaml"
@@ -337,7 +337,7 @@ def main():
         print("Using the baseline stable-diffusion model")
         opt.config = "configs/stable-diffusion/v1-inference.yaml"
         opt.ckpt = "models/ldm/stable-diffusion-v4/model.ckpt"
-    
+
     seed_everything(opt.seed)
 
     config = OmegaConf.load(f"{opt.config}")
@@ -357,10 +357,12 @@ def main():
     os.makedirs(opt.outdir, exist_ok=True)
     outpath = opt.outdir
 
-    print("Creating invisible watermark encoder (see https://github.com/ShieldMnt/invisible-watermark)...")
+    print(
+        "Creating invisible watermark encoder (see https://github.com/ShieldMnt/invisible-watermark)..."
+    )
     wm = "StableDiffusionV1"
     wm_encoder = WatermarkEncoder()
-    wm_encoder.set_watermark('bytes', wm.encode('utf-8'))
+    wm_encoder.set_watermark("bytes", wm.encode("utf-8"))
 
     batch_size = opt.n_samples
     n_rows = opt.n_rows if opt.n_rows > 0 else batch_size
@@ -394,17 +396,14 @@ def main():
     import torch.nn.functional as f
     import matplotlib.pyplot as plt
 
-
     def load_yaml(file_path: str) -> dict:
         with open(file_path) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
 
-    
-    
-    model_config=opt.dps_path+opt.model_config
-    diffusion_config=opt.dps_path+opt.diffusion_config
-    task_config=opt.dps_path+opt.task_config
+    model_config = opt.dps_path + opt.model_config
+    diffusion_config = opt.dps_path + opt.diffusion_config
+    task_config = opt.dps_path + opt.task_config
 
     # pdb.set_trace()
 
@@ -414,42 +413,41 @@ def main():
     task_config = load_yaml(task_config)
 
     # Get a list of all images to create a synthetic dataset
-    task_config['data']['root'] = opt.dataset_yolov7 + '/train'
-    images = os.listdir(task_config['data']['root'] + '/images')
+    task_config["data"]["root"] = opt.dataset_yolov7 + "/train"
+    images = os.listdir(task_config["data"]["root"] + "/images")
 
     print(len(images))
     count = 0
     # Iterate through every image in the training set
     for image in images:
         count += 1
-        if count <= 381:
+        if count <= 381 + 162:
             continue
         # Load the image
-        img = plt.imread(task_config['data']['root']+'/images/'+image)
+        img = plt.imread(task_config["data"]["root"] + "/images/" + image)
         # img = next(iter(loader))
 
         img = img - img.min()
         img = img / img.max()
         img = torch.FloatTensor(img)
-        img = torch.unsqueeze(img, dim=0).permute(0,3,1,2)
-        img = img[:,:3,:,:].cuda()
+        img = torch.unsqueeze(img, dim=0).permute(0, 3, 1, 2)
+        img = img[:, :3, :, :].cuda()
 
         # Prepare Operator and noise
-        measure_config = task_config['measurement']
-        operator = get_operator(device=device, **measure_config['operator'])
-        noiser = get_noise(**measure_config['noise'])
+        measure_config = task_config["measurement"]
+        operator = get_operator(device=device, **measure_config["operator"])
+        noiser = get_noise(**measure_config["noise"])
 
-        # Exception) In case of inpainting, we need to generate a mask 
-        if measure_config['operator']['name'] == 'inpainting':
+        # Exception) In case of inpainting, we need to generate a mask
+        if measure_config["operator"]["name"] == "inpainting":
             name, _ = os.path.splitext(image)
-            label_path = task_config['data']['root']+'/labels/'+name+'.txt'
+            label_path = task_config["data"]["root"] + "/labels/" + name + ".txt"
             mask_gen = mask_generator(
-            **measure_config['mask_opt'],
-            yolov7_bounding_box_path=label_path
+                **measure_config["mask_opt"], yolov7_bounding_box_path=label_path
             )
-        
+
         img = f.interpolate(img, opt.H)
-        x_checked_image_torch = img[:,:3,:,:].cuda()
+        x_checked_image_torch = img[:, :3, :, :].cuda()
 
         if len(mask_gen.bb_info) == 0:
             continue
@@ -473,32 +471,33 @@ def main():
         # plt.show()
 
         org_image = torch.clone(x_checked_image_torch[0].detach())
-        org_image = (org_image - 0.5)/0.5
-        org_image = org_image[None,:,:,:].cuda()
+        org_image = (org_image - 0.5) / 0.5
+        org_image = org_image[None, :, :, :].cuda()
 
         # Exception) In case of inpainting,
-        if measure_config['operator'] ['name'] == 'inpainting':
-            mask = mask_gen(org_image) # dps mask
+        if measure_config["operator"]["name"] == "inpainting":
+            mask = mask_gen(org_image)  # dps mask
             # mask = torch.ones_like(org_image) # no mask
-            
+
             # Forward measurement model (Ax + n)
             y = operator.forward(org_image, mask=mask)
             y_n = noiser(y)
 
-        else: 
+        else:
             # Forward measurement model (Ax + n)
             y = operator.forward(org_image)
             y_n = noiser(y)
             mask = None
-        
 
         #########################################################
 
         start_code = None
         if opt.fixed_code:
-            start_code = torch.randn([opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+            start_code = torch.randn(
+                [opt.n_samples, opt.C, opt.H // opt.f, opt.W // opt.f], device=device
+            )
 
-        precision_scope = autocast if opt.precision=="autocast" else nullcontext
+        precision_scope = autocast if opt.precision == "autocast" else nullcontext
         with precision_scope("cuda"):
             with model.ema_scope():
                 tic = time.time()
@@ -508,58 +507,66 @@ def main():
                         uc = None
                         if opt.ffhq256:
                             shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                            samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
-                                                            batch_size=opt.n_samples,
-                                                            shape=shape,
-                                                            verbose=False,
-                                                            eta=opt.ddim_eta,
-                                                            x_T=start_code,
-                                                            ip_mask = mask,
-                                                            measurements = y_n,
-                                                            operator = operator,
-                                                            gamma = opt.gamma,
-                                                            inpainting = opt.inpainting,
-                                                            omega = opt.omega,
-                                                            general_inverse=opt.general_inverse,
-                                                            noiser=noiser,
-                                                            ffhq256=opt.ffhq256)
+                            samples_ddim, _ = sampler.sample(
+                                S=opt.ddim_steps,
+                                batch_size=opt.n_samples,
+                                shape=shape,
+                                verbose=False,
+                                eta=opt.ddim_eta,
+                                x_T=start_code,
+                                ip_mask=mask,
+                                measurements=y_n,
+                                operator=operator,
+                                gamma=opt.gamma,
+                                inpainting=opt.inpainting,
+                                omega=opt.omega,
+                                general_inverse=opt.general_inverse,
+                                noiser=noiser,
+                                ffhq256=opt.ffhq256,
+                            )
                         else:
                             # pdb.set_trace()
-                            if opt.scale != 1.0 :
+                            if opt.scale != 1.0:
                                 uc = model.get_learned_conditioning(batch_size * [""])
                             if isinstance(prompts, tuple):
                                 prompts = list(prompts)
                             c = model.get_learned_conditioning(prompts)
                             shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                            samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
-                                                            conditioning=c,
-                                                            batch_size=opt.n_samples,
-                                                            shape=shape,
-                                                            verbose=False,
-                                                            unconditional_guidance_scale=opt.scale,
-                                                            unconditional_conditioning=uc,
-                                                            eta=opt.ddim_eta,
-                                                            x_T=start_code,
-                                                            ip_mask = mask,
-                                                            measurements = y_n,
-                                                            operator = operator,
-                                                            gamma = opt.gamma,
-                                                            inpainting = opt.inpainting,
-                                                            omega = opt.omega,
-                                                            general_inverse=opt.general_inverse,
-                                                            noiser=noiser)
-
+                            samples_ddim, _ = sampler.sample(
+                                S=opt.ddim_steps,
+                                conditioning=c,
+                                batch_size=opt.n_samples,
+                                shape=shape,
+                                verbose=False,
+                                unconditional_guidance_scale=opt.scale,
+                                unconditional_conditioning=uc,
+                                eta=opt.ddim_eta,
+                                x_T=start_code,
+                                ip_mask=mask,
+                                measurements=y_n,
+                                operator=operator,
+                                gamma=opt.gamma,
+                                inpainting=opt.inpainting,
+                                omega=opt.omega,
+                                general_inverse=opt.general_inverse,
+                                noiser=noiser,
+                            )
 
                         x_samples_ddim = model.decode_first_stage(samples_ddim)
-                        x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-                        x_samples_ddim = x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
+                        x_samples_ddim = torch.clamp(
+                            (x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0
+                        )
+                        x_samples_ddim = (
+                            x_samples_ddim.cpu().permute(0, 2, 3, 1).numpy()
+                        )
 
                         # x_checked_image, has_nsfw_concept = check_safety(x_samples_ddim)
                         # x_checked_image_torch = torch.from_numpy(x_checked_image).permute(0, 3, 1, 2)
-                        
-                        x_checked_image_torch = torch.from_numpy(x_samples_ddim).permute(0, 3, 1, 2)
-                        
-                        
+
+                        x_checked_image_torch = torch.from_numpy(
+                            x_samples_ddim
+                        ).permute(0, 3, 1, 2)
+
                         # if not opt.skip_save:
                         #     for x_sample in x_checked_image_torch:
                         #         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
@@ -570,21 +577,34 @@ def main():
 
                         if not opt.skip_save:
                             for i, x_sample in enumerate(x_checked_image_torch):
-                                x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                                x_sample = 255.0 * rearrange(
+                                    x_sample.cpu().numpy(), "c h w -> h w c"
+                                )
                                 img = Image.fromarray(x_sample.astype(np.uint8))
                                 # img = put_watermark(img, wm_encoder)
-                                img.convert('L').save(os.path.join(sample_path, f"{image}_{i+1}.png"))
+                                img.convert("L").save(
+                                    os.path.join(sample_path, f"{image}_{i+1}.png")
+                                )
 
                                 if not opt.skip_label:
                                     image_name, _ = os.path.splitext(image)
-                                    image_loc = task_config['data']['root']+'/labels/'+image_name+'.txt'
-                                    shutil.copy(image_loc, os.path.join(os.path.join(outpath, "labels"), f"{image}_{i+1}.txt"))
-
-
+                                    image_loc = (
+                                        task_config["data"]["root"]
+                                        + "/labels/"
+                                        + image_name
+                                        + ".txt"
+                                    )
+                                    shutil.copy(
+                                        image_loc,
+                                        os.path.join(
+                                            os.path.join(outpath, "labels"),
+                                            f"{image}_{i+1}.txt",
+                                        ),
+                                    )
 
                         if not opt.skip_grid:
                             all_samples.append(x_checked_image_torch)
-                        
+
                         # pdb.set_trace()
                         # if not opt.skip_low_res:
                         #     if not opt.skip_save:
@@ -596,26 +616,25 @@ def main():
                         #             img.save(os.path.join(sample_path, f"{base_count:05}_low_res.png"))
                         #             base_count += 1
 
-                            
-
                 if not opt.skip_grid:
                     # additionally, save as grid
                     grid = torch.stack(all_samples, 0)
-                    grid = rearrange(grid, 'n b c h w -> (n b) c h w')
+                    grid = rearrange(grid, "n b c h w -> (n b) c h w")
                     grid = make_grid(grid, nrow=n_rows)
 
                     # to image
-                    grid = 255. * rearrange(grid, 'c h w -> h w c').cpu().numpy()
+                    grid = 255.0 * rearrange(grid, "c h w -> h w c").cpu().numpy()
                     img = Image.fromarray(grid.astype(np.uint8))
                     # img = put_watermark(img, wm_encoder)
-                    img.save(os.path.join(outpath, f'grid-{grid_count:04}.png'))
+                    img.save(os.path.join(outpath, f"grid-{grid_count:04}.png"))
                     grid_count += 1
 
                 toc = time.time()
 
-        print(f"Your samples are ready and waiting for you here: \n{outpath} \n"
-            f" \nEnjoy.")
-        
+        print(
+            f"Your samples are ready and waiting for you here: \n{outpath} \n"
+            f" \nEnjoy."
+        )
 
 
 if __name__ == "__main__":
