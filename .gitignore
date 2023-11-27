@@ -4802,3 +4802,9 @@ stable-diffusion/outputs/train/samples/z_0_9959_png.rf.e400cecac11e9680ace8b9b78
 stable-diffusion/outputs/train/samples/z_0_9959_png.rf.e400cecac11e9680ace8b9b78ee3aa8d.jpg_2.png
 stable-diffusion/outputs/train/samples/z_0_9995_png.rf.3ae8677336a71fe539eac5ceb8df9b68.jpg_1.png
 stable-diffusion/outputs/train/samples/z_0_9995_png.rf.3ae8677336a71fe539eac5ceb8df9b68.jpg_2.png
+stable-diffusion/outputs/train/labels/n_0_7428_png.rf.6fce345206da345479199be2410f7f40.jpg_1.txt
+stable-diffusion/outputs/train/labels/n_0_7428_png.rf.6fce345206da345479199be2410f7f40.jpg_2.txt
+stable-diffusion/outputs/train/samples/n_0_7428_png.rf.6fce345206da345479199be2410f7f40.jpg_1.png
+stable-diffusion/outputs/train/samples/n_0_7428_png.rf.6fce345206da345479199be2410f7f40.jpg_2.png
+stable-diffusion/outputs/ideatesting/entirepainting/Figure_1.png
+stable-diffusion/outputs/ideatesting/entirepainting/samples/n_0_6129_png.rf.a0d329f21af2685841cbcc1845eeac8a.jpg_1.png

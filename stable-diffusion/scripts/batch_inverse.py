@@ -421,8 +421,8 @@ def main():
     # Iterate through every image in the training set
     for image in images:
         count += 1
-        if count <= 381 + 162:
-            continue
+        if count > 1:
+            break
         # Load the image
         img = plt.imread(task_config["data"]["root"] + "/images/" + image)
         # img = next(iter(loader))
@@ -451,24 +451,24 @@ def main():
 
         if len(mask_gen.bb_info) == 0:
             continue
-        # # Detach the image and mask from their computation graph and move them to the CPU
-        # img_t = img[0].detach().cpu().numpy()
-        # mask_t = mask_gen(img)[0].detach().cpu().numpy()
+        # Detach the image and mask from their computation graph and move them to the CPU
+        img_t = img[0].detach().cpu().numpy()
+        mask_t = mask_gen(img)[0].detach().cpu().numpy()
 
-        # print(image)
+        print(image)
 
-        # # Display the image
-        # plt.figure(figsize=(10, 5))
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(img_t.transpose(1, 2, 0))
-        # plt.title('Image')
+        # Display the image
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.imshow(img_t.transpose(1, 2, 0))
+        plt.title('Image')
 
-        # # Display the mask
-        # plt.subplot(1, 2, 2)
-        # plt.imshow(mask_t.transpose(1, 2, 0), cmap='gray')
-        # plt.title('Mask')
+        # Display the mask
+        plt.subplot(1, 2, 2)
+        plt.imshow(mask_t.transpose(1, 2, 0), cmap='gray')
+        plt.title('Mask')
 
-        # plt.show()
+        plt.show()
 
         org_image = torch.clone(x_checked_image_torch[0].detach())
         org_image = (org_image - 0.5) / 0.5
