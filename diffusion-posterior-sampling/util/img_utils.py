@@ -1,6 +1,8 @@
+import marshal
 import numpy as np
 import torch
 import scipy
+import random
 import torch.nn.functional as F
 from torch import nn
 from torch.autograd import Variable
@@ -249,6 +251,50 @@ def create_random_mask_from_bbox(img, mask_shape, mask_prob_range, image_size=25
 
         return mask
 
+def create_random_inpainting_from_bbox(img, mask_shape, mask_prob_range, image_size=256, margin=(16,16)):
+        total = image_size ** 2
+        l, h = mask_prob_range
+        prob = np.random.uniform(l, h)
+        mask_vec = torch.ones([1, image_size * image_size])
+        samples = np.random.choice(image_size * image_size, int(total * prob), replace=False)
+        mask_vec[:, samples] = 0
+        mask_b = mask_vec.view(1, image_size, image_size)
+        mask_b = mask_b.repeat(3, 1, 1)
+        mask = torch.ones_like(img, device=img.device)
+        mask[:, ...] = mask_b
+
+        B, C, H, W = img.shape
+
+        bbox_mask = torch.ones_like(img, device)
+
+        for sample in mask_shape:
+                _, x_center, y_center, width, height = sample
+
+                # Convert normalized coordinates to pixel coordinates
+                x_center *= image_size
+                y_center *= image_size
+                width *= image_size
+                height *= image_size
+
+                # Calculate the top-left and bottom-right corners of the bounding box
+                x1 = int(x_center - width / 2)
+                y1 = int(y_center - height / 2)
+                x2 = int(x_center + width / 2)
+                y2 = int(y_center + height / 2)
+
+                # Apply the margin
+                x1 = max(0, x1 - margin[0])
+                y1 = max(0, y1 - margin[1])
+                x2 = min(image_size - 1, x2 + margin[0])
+                y2 = min(image_size - 1, y2 + margin[1])
+
+                # Set the mask values for this samples bounding box to 0
+                bbox_mask[...,y1:y2, x1:x2] = 0
+
+        # Combine the masks
+        mask = torch.logical_or(mask, bbox_mask).long()
+        return mask
+
 def create_random_outpainting_mask_from_bbox_distance(img, mask_shape, mask_prob_dist, image_size=256, margin=(16,16)):
 
         B, C, H, W = img.shape
@@ -358,6 +404,47 @@ def create_random_entire_mask_from_bbox_distance(img, mask_shape, mask_prob_dist
 
     return combined_mask
 
+def RandomErasingMask(img, mask_shape, mask_prob_dist, image_size, margin=(16, 16)):
+
+    B, C, H, W = img.shape
+
+    # make a mask
+    mask = torch.ones([B, C, H, W], device=img.device)
+    
+    for sample in mask_shape:
+        _, x_center, y_center, width, height = sample
+
+        # Convert normalized coordinates to pixel coordinates
+        x_center *= image_size
+        y_center *= image_size
+        width *= image_size
+        height *= image_size
+
+        # Calculate the top-left and bottom-right corners of the bounding box
+        x1 = int(x_center - width / 2)
+        y1 = int(y_center - height / 2)
+        x2 = int(x_center + width / 2)
+        y2 = int(y_center + height / 2)
+
+        # Apply the margin
+        x1 = max(0, x1 - margin[0])
+        y1 = max(0, y1 - margin[1])
+        x2 = min(image_size - 1, x2 + margin[0])
+        y2 = min(image_size - 1, y2 + margin[1])
+
+        # Determine width and height for random erasing box
+        h = int(random.uniform(mask_prob_dist[0], mask_prob_dist[1]) * (y2 - y1))
+        w = int(random.uniform(mask_prob_dist[0], mask_prob_dist[1]) * (x2 - x1))
+
+        # Determine new top right corner location
+        xc = int(random.uniform(mask_prob_dist[0], mask_prob_dist[1]) * (x2 - x1 - w))
+        yc = int(random.uniform(mask_prob_dist[0], mask_prob_dist[1]) * (y2 - y1 - h))
+
+        # Create mask
+        mask[..., y1+yc:y1+yc+h, x1+xc:x1+xc+w] = 0
+
+    return mask
+
 class mask_generator:
     def __init__(self, mask_type, mask_len_range=None, mask_prob_dist=None, mask_prob_range=None,
                  image_size=256, margin=(16, 16), yolov7_bounding_box_path=None):
@@ -367,7 +454,7 @@ class mask_generator:
         (mask_prob_range): for the case of random masking,
         specify the probability of individual pixels being masked
         """
-        assert mask_type in ['box', 'random', 'both', 'extreme', 'outpainting', 'random-outpainting', 'random-entirepainting']
+        assert mask_type in ['box', 'random', 'both', 'extreme', 'outpainting', 'random-outpainting', 'random-entirepainting', 'RandomErasingORE']
         self.mask_type = mask_type
         self.mask_len_range = mask_len_range
         self.mask_prob_range = mask_prob_range
@@ -427,6 +514,16 @@ class mask_generator:
                                                              margin=self.margin)
         
         return mask
+    
+    def _retrieve_random_erasing_ore(self, img):
+        assert self.bb_path is not None, "Bouding Box Path was Never Passed"
+    
+        mask = RandomErasingMask(img,
+                                 mask_shape=self.bb_info,
+                                 mask_prob_dist=self.mask_prob_dist,
+                                 image_size=self.image_size,
+                                 margin=self.margin)
+        return mask
 
     def _retrieve_random(self, img):
         total = self.image_size ** 2
@@ -461,6 +558,9 @@ class mask_generator:
             return mask
         elif self.mask_type == 'random-entirepainting':
             mask = self._retrieve_random_distance_painting_box(img)
+            return mask
+        elif self.mask_type == 'RandomErasingORE':
+            mask = self._retrieve_random_erasing_ore(img)
             return mask
 
 def unnormalize(img, s=0.95):
