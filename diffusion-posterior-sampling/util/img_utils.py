@@ -496,7 +496,7 @@ class mask_generator:
         assert self.bb_path is not None, "Bounding Box Path was Never Passed"
 
         # Creat the mask based on each of the samples
-        mask = create_random_entire_mask_from_bbox_distance(img,
+        mask = create_random_outpainting_mask_from_bbox_distance(img,
                                                      mask_shape=self.bb_info,
                                                      mask_prob_dist=self.mask_prob_dist,
                                                      image_size=self.image_size,

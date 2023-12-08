@@ -68,6 +68,9 @@ def load_model_from_config(config, ckpt, verbose=False):
     model.eval()
     return model
 
+def load_sdxl_from_config(config, ckpt, verbose=False):
+    pass
+
 
 def put_watermark(img, wm_encoder=None):
     if wm_encoder is not None:
@@ -421,8 +424,8 @@ def main():
     # Iterate through every image in the training set
     for image in images:
         count += 1
-        if count < 0:
-            continue
+        if count > 1:
+            break
         # Load the image
         img = plt.imread(task_config["data"]["root"] + "/images/" + image)
         # img = next(iter(loader))
@@ -449,8 +452,8 @@ def main():
         img = f.interpolate(img, opt.H)
         x_checked_image_torch = img[:, :3, :, :].cuda()
 
-        if len(mask_gen.bb_info) == 0:
-            continue
+        # if len(mask_gen.bb_info) == 0:
+        #     continue
         # # Detach the image and mask from their computation graph and move them to the CPU
         # img_t = img[0].detach().cpu().numpy()
         # mask_t = mask_gen(img)[0].detach().cpu().numpy()
@@ -481,6 +484,38 @@ def main():
 
             # Forward measurement model (Ax + n)
             y = operator.forward(org_image, mask=mask)
+            # y_dis = y[0].detach().cpu().numpy()
+            # img_t = img[0].detach().cpu().numpy()
+            # mask_t = mask[0].detach().cpu().numpy()
+
+            # # Create the figure and the subplots
+            # fig, axs = plt.subplots(1, 3, figsize=(10, 5))
+
+            # # Display the image
+            # axs[0].imshow(img_t.transpose(1, 2, 0))
+            # axs[0].set_title('Image')
+            # axs[0].axis('off')
+
+            # # Display the mask
+            # axs[1].imshow(mask_t.transpose(1, 2, 0), cmap='gray')
+            # axs[1].set_title('Mask')
+            # axs[1].axis('off')
+
+            # # Display Combined Mask
+            # axs[2].imshow(y_dis.transpose(1, 2, 0), cmap='gray')
+            # axs[2].set_title('Combined')
+            # axs[2].axis('off')
+
+            # # Adjust spacing between images and remove margins
+            # plt.subplots_adjust(wspace=0.1, hspace=0.1)
+            # plt.tight_layout(pad=0.5)
+
+            # # Save high-quality version of the image
+            # plt.savefig('output.png', dpi=300, bbox_inches='tight', pad_inches=0.1)
+
+            # # Show the figure
+            # plt.show()
+            # break
             y_n = noiser(y)
 
         else:
